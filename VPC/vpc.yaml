@@ -1,0 +1,286 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: template for VPC
+
+Parameters:
+  VpcFirstOctet:
+    Description: specify the first octed for the VPC
+    Type: Number
+    Default: 10
+
+  VpcSecondOctet:
+    Description: specify the second octet for the VPC
+    Type: Number
+    Default: 0
+
+  NumberOfSubnets:
+    Description: specify the number of subnets(select 4 or 6)
+    Type: Number
+    AllowedValues: [4, 6]
+    Default: 4
+
+  Prefix:
+    Description: specify the prefix of resource name
+    Type: String
+    Default: prefix
+
+  ProjectTagValue:
+    Description: project tag is used to specify the intended use of the resources
+    Type: String
+    Default: XXX
+
+Conditions:
+  CreateProtectedSubnet:
+    Fn::Equals:
+      - !Ref NumberOfSubnets
+      - 6
+
+Resources:
+  #============================================
+  # VPC
+  #============================================
+  Vpc:
+    Type: "AWS::EC2::VPC"
+    DeletionPolicy: Delete
+    Properties:
+      CidrBlock: !Sub ${VpcFirstOctet}.${VpcSecondOctet}.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${Prefix}-vpc
+        - Key: project
+          Value: !Ref ProjectTagValue
+
+  #============================================
+  # Subnet
+  #============================================
+  SubnetPublicA:
+    Type: "AWS::EC2::Subnet"
+    DeletionPolicy: Delete
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: ap-northeast-1a
+      CidrBlock: !Sub ${VpcFirstOctet}.${VpcSecondOctet}.0.0/24
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${Prefix}-subnet-public-a
+        - Key: application
+          Value: !Ref ProjectTagValue
+
+  SubnetPublicC:
+    Type: "AWS::EC2::Subnet"
+    DeletionPolicy: Delete
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: ap-northeast-1c
+      CidrBlock: !Sub ${VpcFirstOctet}.${VpcSecondOctet}.1.0/24
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${Prefix}-subnet-public-c
+        - Key: application
+          Value: !Ref ProjectTagValue
+
+  SubnetProtectedA:
+    Condition: CreateProtectedSubnet
+    Type: "AWS::EC2::Subnet"
+    DeletionPolicy: Delete
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: ap-northeast-1a
+      CidrBlock: !Sub ${VpcFirstOctet}.${VpcSecondOctet}.10.0/24
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${Prefix}-subnet-protected-a
+        - Key: project
+          Value: !Ref ProjectTagValue
+
+  SubnetProtectedC:
+    Condition: CreateProtectedSubnet
+    Type: "AWS::EC2::Subnet"
+    DeletionPolicy: Delete
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: ap-northeast-1c
+      CidrBlock: !Sub ${VpcFirstOctet}.${VpcSecondOctet}.11.0/24
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${Prefix}-subnet-protected-c
+        - Key: project
+          Value: !Ref ProjectTagValue
+
+  SubnetPrivateA:
+    Type: "AWS::EC2::Subnet"
+    DeletionPolicy: Delete
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: ap-northeast-1a
+      CidrBlock: !Sub ${VpcFirstOctet}.${VpcSecondOctet}.20.0/24
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${Prefix}-subnet-private-a
+        - Key: project
+          Value: !Ref ProjectTagValue
+
+  SubnetPrivateC:
+    Type: "AWS::EC2::Subnet"
+    DeletionPolicy: Delete
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: ap-northeast-1c
+      CidrBlock: !Sub ${VpcFirstOctet}.${VpcSecondOctet}.21.0/24
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${Prefix}-subnet-private-c
+        - Key: project
+          Value: !Ref ProjectTagValue
+
+  #============================================
+  # Internet Gateway / Nat Gateway
+  #============================================
+  Igw:
+    Type: "AWS::EC2::InternetGateway"
+    DeletionPolicy: Delete
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${Prefix}-igw
+        - Key: project
+          Value: !Ref ProjectTagValue
+
+  IgwAttach:
+    Type: "AWS::EC2::VPCGatewayAttachment"
+    DeletionPolicy: Delete
+    Properties:
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref Igw
+
+  EipForNgw:
+    Condition: CreateProtectedSubnet
+    Type: "AWS::EC2::EIP"
+    DeletionPolicy: Delete
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${Prefix}-eip-for-ngw
+        - Key: project
+          Value: !Ref ProjectTagValue
+
+  Ngw:
+    Condition: CreateProtectedSubnet
+    Type: "AWS::EC2::NatGateway"
+    DeletionPolicy: Delete
+    Properties:
+      AllocationId: !GetAtt
+        - EipForNgw
+        - AllocationId
+      SubnetId: !Ref SubnetPublicA
+      Tags:
+        - Key: Name
+          Value: !Sub ${Prefix}-ngw-public-a
+        - Key: project
+          Value: !Ref ProjectTagValue
+
+  #============================================
+  # Route Table
+  #============================================
+  RtbPublic:
+    Type: "AWS::EC2::RouteTable"
+    DeletionPolicy: Delete
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub ${Prefix}-route-table-puclic
+        - Key: project
+          Value: !Ref ProjectTagValue
+
+  RtbPublicRoute0:
+    Type: "AWS::EC2::Route"
+    DependsOn: Igw
+    DeletionPolicy: Delete
+    Properties:
+      RouteTableId: !Ref RtbPublic
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref Igw
+
+  RtbProtected:
+    Condition: CreateProtectedSubnet
+    Type: "AWS::EC2::RouteTable"
+    DeletionPolicy: Delete
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub ${Prefix}-route-table-protected
+        - Key: project
+          Value: !Ref ProjectTagValue
+
+  RtbProtectedRoute0:
+    Condition: CreateProtectedSubnet
+    Type: "AWS::EC2::Route"
+    DeletionPolicy: Delete
+    Properties:
+      RouteTableId: !Ref RtbProtected
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref Ngw
+
+  RtbPrivate:
+    Type: "AWS::EC2::RouteTable"
+    DeletionPolicy: Delete
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub ${Prefix}-route-table-private
+        - Key: project
+          Value: !Ref ProjectTagValue
+
+  SubnetRouteTableAssociationPublicA:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    DeletionPolicy: Delete
+    Properties:
+      SubnetId: !Ref SubnetPublicA
+      RouteTableId: !Ref RtbPublic
+
+  SubnetRouteTableAssociationPublicC:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    DeletionPolicy: Delete
+    Properties:
+      SubnetId: !Ref SubnetPublicC
+      RouteTableId: !Ref RtbPublic
+
+  SubnetRouteTableAssociationProtectedA:
+    Condition: CreateProtectedSubnet
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    DeletionPolicy: Delete
+    Properties:
+      SubnetId: !Ref SubnetProtectedA
+      RouteTableId: !Ref RtbProtected
+
+  SubnetRouteTableAssociationProtectedC:
+    Condition: CreateProtectedSubnet
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    DeletionPolicy: Delete
+    Properties:
+      SubnetId: !Ref SubnetProtectedC
+      RouteTableId: !Ref RtbProtected
+
+  SubnetRouteTableAssociationPrivateA:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    DeletionPolicy: Delete
+    Properties:
+      SubnetId: !Ref SubnetPrivateA
+      RouteTableId: !Ref RtbPrivate
+
+  SubnetRouteTableAssociationPrivateC:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    DeletionPolicy: Delete
+    Properties:
+      SubnetId: !Ref SubnetPrivateC
+      RouteTableId: !Ref RtbPrivate
