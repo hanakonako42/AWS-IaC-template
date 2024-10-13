@@ -4,7 +4,7 @@
 
 ### 4 subnets version(default)
 
-![image][VPC/picture/background_white_subnets_4.png]
+![image][../picture/background_white_subnets_4.png]
 
 ### 6 subnets version
 
