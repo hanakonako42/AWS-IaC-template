@@ -13,9 +13,9 @@
 ## parameters
 
 | parameter name  | value  |
-| :-------------: | :----: |
-|  VpcFirstOctet  |   10   |
-|  pcSecondOctet  |   0    |
+| :-------------- | :----: |
+| VpcFirstOctet   |   10   |
+| VpcSecondOctet  |   0    |
 | NumberOfSubnets |   4    |
-|     Prefix      | prefix |
+| Prefix          | prefix |
 | ProjectTagValue |  XXX   |
